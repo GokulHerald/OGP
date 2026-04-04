@@ -1,0 +1,10 @@
+You are building an Online Gaming Platform (OGP) for esports tournaments.
+Stack: React.js + Tailwind CSS (frontend), Node.js + Express (backend), MongoDB + Mongoose (database), Firebase Auth (OTP).
+File storage: Cloudinary for screenshot uploads.
+Folder structure: /client (React), /server (Express), /shared (types/constants).
+All API routes must be RESTful and prefixed with /api/v1.
+Always use async/await, never .then() chains.
+Always validate request bodies using express-validator.
+MongoDB models live in /server/models. Routes in /server/routes. Controllers in /server/controllers.
+Never put business logic in route files — always use controller functions.
+JWT tokens are used for session management after Firebase OTP verification.

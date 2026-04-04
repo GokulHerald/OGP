@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Inter:wght@400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #080808;
+    color: #f3f4f6;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(232, 57, 42, 0.25);
+}
+.glow-red-strong {
+  box-shadow: 0 0 40px rgba(232, 57, 42, 0.4);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #e8392a, #f97316);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.card-surface {
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 12px;
+}
+.noise-bg {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+.bracket-scrollbar::-webkit-scrollbar {
+  height: 4px;
+}
+.bracket-scrollbar::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+.bracket-scrollbar::-webkit-scrollbar-thumb {
+  background: #e8392a;
+  border-radius: 2px;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brand-red hover:bg-red-600 text-white font-semibold 
+           px-6 py-3 rounded-lg shadow-glow-red transition-all duration-200 
+           active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-brand-border hover:bg-zinc-700 text-brand-light 
+           font-semibold px-6 py-3 rounded-lg 
+           transition-all duration-200 active:scale-95 border border-brand-border;
+  }
+  .btn-ghost {
+    @apply text-brand-muted hover:text-brand-light 
+           transition-colors duration-200 px-4 py-2;
+  }
+  .card {
+    @apply bg-brand-card border border-brand-border 
+           rounded-xl p-6 transition-all duration-200;
+  }
+  .card-hover {
+    @apply card hover:border-brand-red/40 hover:shadow-glow-red;
+  }
+  .input {
+    @apply w-full bg-brand-subtle border border-brand-border 
+           text-brand-light placeholder-brand-muted 
+           rounded-lg px-4 py-3 outline-none 
+           focus:border-brand-red focus:ring-2 
+           focus:ring-brand-red/40 transition-colors duration-200;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 
+           rounded-full text-xs font-semibold;
+  }
+  .badge-green {
+    @apply badge bg-green-500/20 text-green-400;
+  }
+  .badge-red {
+    @apply badge bg-red-500/20 text-red-400;
+  }
+  .badge-orange {
+    @apply badge bg-orange-500/20 text-orange-400;
+  }
+  .badge-gray {
+    @apply badge bg-zinc-800 text-zinc-300;
+  }
+}
