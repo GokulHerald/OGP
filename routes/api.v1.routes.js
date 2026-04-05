@@ -1,6 +1,12 @@
 const express = require('express');
+const connectDB = require('../config/db');
 
 const router = express.Router();
+
+router.use(async (req, res, next) => {
+  await connectDB();
+  next();
+});
 
 router.get('/ping', (req, res) => {
   res.json({ ok: true, service: 'ogp-api' });

@@ -5,7 +5,8 @@ async function connectDB() {
 
   if (!uri) {
     console.error('MONGODB_URI is not set');
-    process.exit(1);
+    if (process.env.NODE_ENV !== 'production') process.exit(1);
+    throw new Error('MONGODB_URI is not set');
   }
 
   try {
