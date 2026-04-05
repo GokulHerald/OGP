@@ -7,6 +7,15 @@ const connectDB = require('./config/db');
 
 const app = express();
 
+let dbConnected = false;
+
+async function ensureDB() {
+  if (!dbConnected) {
+    await connectDB();
+    dbConnected = true;
+  }
+}
+
 app.use(helmet());
 const defaultClient = process.env.CLIENT_URL || 'http://localhost:5173';
 app.use(
@@ -56,13 +65,4 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = Number(process.env.PORT) || 5001;
-
-async function start() {
-  await connectDB();
-  app.listen(PORT, () => {
-    console.log(`Server listening on ${PORT}`);
-  });
-}
-
-start();
+module.exports = app;
