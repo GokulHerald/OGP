@@ -6,6 +6,10 @@ build/
 
 .env
 .env.local
+
+# Firebase Admin SDK (do not commit)
+**/firebase-service-account.json
+gaming-ops-*-firebase-adminsdk-*.json
 .env.*.local
 
 npm-debug.log*
