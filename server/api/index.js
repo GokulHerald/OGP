@@ -9,6 +9,14 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.json({ 
+    name: 'OGP API Server',
+    status: 'running',
+    endpoints: ['/health', '/api/v1/*']
+  });
+});
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
