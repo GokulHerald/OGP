@@ -279,10 +279,99 @@ async function setMatchResult(req, res) {
   }
 }
 
+async function setBrStats(req, res) {
+  try {
+    const { matchId } = req.params;
+    const { squadStats = [] } = req.body;
+
+    const match = await Match.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ message: 'Match not found' });
+    }
+    if (match.kind !== 'br_lobby') {
+      return res.status(400).json({ message: 'BR stats can only be submitted for a BR lobby match' });
+    }
+    if (!Array.isArray(match.brTeams) || match.brTeams.length === 0) {
+      return res.status(400).json({ message: 'BR lobby roster not found' });
+    }
+
+    if (!Array.isArray(squadStats) || squadStats.length === 0) {
+      return res.status(400).json({ message: 'squadStats is required' });
+    }
+
+    const allowed = new Map(); // userId -> teamId
+    for (const slot of match.brTeams) {
+      const teamId = String(slot.team?._id || slot.team);
+      (slot.players || []).forEach((p) => {
+        const uid = String(p?._id || p);
+        allowed.set(uid, teamId);
+      });
+    }
+
+    const seen = new Set();
+    const rows = [];
+    for (const r of squadStats) {
+      const userId = String(r.userId || '').trim();
+      if (!userId) {
+        return res.status(400).json({ message: 'Each row must include userId' });
+      }
+      if (!allowed.has(userId)) {
+        return res.status(400).json({ message: `User ${userId} is not in this lobby roster` });
+      }
+      if (seen.has(userId)) {
+        return res.status(400).json({ message: `Duplicate userId ${userId} in squadStats` });
+      }
+      seen.add(userId);
+
+      const kills = Number(r.kills ?? 0);
+      const placement = r.placement == null || r.placement === '' ? null : Number(r.placement);
+      const score = Number(r.score ?? 0);
+      if (!Number.isFinite(kills) || kills < 0) {
+        return res.status(400).json({ message: `Invalid kills for user ${userId}` });
+      }
+      if (placement != null && (!Number.isFinite(placement) || placement < 1)) {
+        return res.status(400).json({ message: `Invalid placement for user ${userId}` });
+      }
+      if (!Number.isFinite(score)) {
+        return res.status(400).json({ message: `Invalid score for user ${userId}` });
+      }
+
+      rows.push({
+        user: userId,
+        team: allowed.get(userId),
+        kills,
+        placement,
+        score,
+      });
+    }
+
+    match.result.squadStats = rows;
+    match.result.verifiedBy = req.user._id;
+    match.result.verifiedAt = Date.now();
+    await match.save();
+
+    const updated = await Match.findById(matchId)
+      .populate({
+        path: 'brTeams.team',
+        select: 'name captain members',
+        populate: [
+          { path: 'captain', select: 'username profilePicture' },
+          { path: 'members', select: 'username profilePicture' },
+        ],
+      })
+      .populate('brTeams.players', 'username profilePicture');
+
+    return res.status(200).json({ message: 'BR stats saved', match: updated });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Failed to save BR stats' });
+  }
+}
+
 module.exports = {
   getMatchesByTournament,
   submitStreamLink,
   submitMatchProof,
   setMatchResult,
+  setBrStats,
 };
 

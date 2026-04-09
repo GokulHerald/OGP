@@ -65,6 +65,20 @@ const MatchSchema = new Schema(
       player1Score: { type: Number, default: null },
       player2Score: { type: Number, default: null },
 
+      /** BR per-player results (organizer entered). */
+      squadStats: {
+        type: [
+          {
+            user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+            team: { type: Schema.Types.ObjectId, ref: 'Team', required: true },
+            kills: { type: Number, default: 0 },
+            placement: { type: Number, default: null },
+            score: { type: Number, default: 0 },
+          },
+        ],
+        default: [],
+      },
+
       verifiedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
       verifiedAt: { type: Date, default: null },
       notes: { type: String, default: '' },

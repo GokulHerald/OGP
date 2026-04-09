@@ -10,6 +10,7 @@ const {
   submitStreamLink,
   submitMatchProof,
   setMatchResult,
+  setBrStats,
 } = require('../controllers/match.controller');
 
 const router = express.Router();
@@ -24,6 +25,7 @@ router.post(
   submitMatchProof,
 );
 router.post('/:matchId/result', protect, restrictTo('organizer'), setMatchResult);
+router.post('/:matchId/br-stats', protect, restrictTo('organizer'), setBrStats);
 
 module.exports = router;
 

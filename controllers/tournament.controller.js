@@ -522,6 +522,242 @@ async function setBrWinner(req, res) {
   }
 }
 
+async function getAdminPlayerStats(req, res) {
+  try {
+    const { id } = req.params;
+
+    const tournament = await Tournament.findById(id)
+      .populate('organizer', 'username')
+      .populate({
+        path: 'registeredTeams',
+        populate: [
+          { path: 'captain', select: 'username profilePicture' },
+          { path: 'members', select: 'username profilePicture' },
+        ],
+      })
+      .populate('registeredPlayers', 'username profilePicture')
+      .populate('winnerTeam', 'name captain');
+
+    if (!tournament) {
+      return res.status(404).json({ message: 'Tournament not found' });
+    }
+
+    if (String(tournament.organizer?._id || tournament.organizer) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Only the organizer can view admin stats' });
+    }
+
+    const matches = await Match.find({ tournament: tournament._id })
+      .populate('player1', 'username profilePicture')
+      .populate('player2', 'username profilePicture')
+      .populate('winner', 'username profilePicture')
+      .populate({
+        path: 'brTeams.team',
+        select: 'name captain members',
+        populate: [
+          { path: 'captain', select: 'username profilePicture' },
+          { path: 'members', select: 'username profilePicture' },
+        ],
+      })
+      .populate('brTeams.players', 'username profilePicture')
+      .sort({ round: 1, matchNumber: 1 });
+
+    const leaderboard = await Leaderboard.findOne({ tournament: tournament._id }).populate(
+      'entries.player',
+      'username profilePicture'
+    );
+
+    const winPoints = Number(leaderboard?.scoringConfig?.winPoints ?? 10);
+
+    const players = new Map(); // userId -> aggregate object
+    const ensure = (userDocOrId) => {
+      if (!userDocOrId) return null;
+      const idStr = String(userDocOrId?._id || userDocOrId);
+      if (!idStr) return null;
+      if (!players.has(idStr)) {
+        const userDoc = typeof userDocOrId === 'object' ? userDocOrId : null;
+        players.set(idStr, {
+          playerId: idStr,
+          player: userDoc ? { _id: userDoc._id, username: userDoc.username, profilePicture: userDoc.profilePicture } : null,
+          totals: {
+            matchesPlayed: 0,
+            wins: 0,
+            losses: 0,
+            totalScore: 0,
+            totalPoints: 0,
+            kills: 0,
+            placements: [],
+            avgPlacement: null,
+            kd: null,
+            streamsSubmitted: 0,
+            proofsSubmitted: 0,
+          },
+          perMatch: [],
+        });
+      } else {
+        // backfill profile if first time was string id
+        const cur = players.get(idStr);
+        if (!cur.player && typeof userDocOrId === 'object') {
+          cur.player = {
+            _id: userDocOrId._id,
+            username: userDocOrId.username,
+            profilePicture: userDocOrId.profilePicture,
+          };
+        }
+      }
+      return players.get(idStr);
+    };
+
+    const pushPerMatch = (agg, m, row) => {
+      agg.totals.matchesPlayed += 1;
+      agg.totals.kills += Number(row.kills || 0);
+      agg.totals.totalScore += Number(row.score || 0);
+      if (row.placement != null) agg.totals.placements.push(Number(row.placement));
+      if (row.streamSubmitted) agg.totals.streamsSubmitted += 1;
+      if (row.proofSubmitted) agg.totals.proofsSubmitted += 1;
+      if (row.isWinner === true) agg.totals.wins += 1;
+      if (row.isWinner === false) agg.totals.losses += 1;
+      agg.perMatch.push({
+        matchId: String(m._id),
+        kind: m.kind || 'duel',
+        round: m.round,
+        matchNumber: m.matchNumber,
+        status: m.status,
+        opponent: row.opponent || null,
+        team: row.team || null,
+        kills: row.kills ?? null,
+        placement: row.placement ?? null,
+        score: row.score ?? null,
+        isWinner: row.isWinner ?? null,
+        streamSubmitted: Boolean(row.streamSubmitted),
+        proofSubmitted: Boolean(row.proofSubmitted),
+      });
+    };
+
+    // Seed from leaderboard (ensures all registered appear even if no matches yet)
+    if (leaderboard?.entries?.length) {
+      leaderboard.entries.forEach((e) => {
+        const agg = ensure(e.player);
+        if (agg) agg.totals.totalPoints = Number(e.points ?? 0);
+      });
+    }
+
+    // Seed from tournament registration lists (covers BR members too)
+    (tournament.registeredPlayers || []).forEach((p) => ensure(p));
+    (tournament.registeredTeams || []).forEach((t) => {
+      if (!t) return;
+      ensure(t.captain);
+      (t.members || []).forEach((m) => ensure(m));
+    });
+
+    for (const m of matches) {
+      if (m.kind === 'br_lobby') {
+        const rosterTeamByUser = new Map(); // userId -> { teamId, teamName }
+        (m.brTeams || []).forEach((slot) => {
+          const teamDoc = slot.team;
+          const teamId = String(teamDoc?._id || teamDoc);
+          const teamName =
+            typeof teamDoc === 'object' && teamDoc != null
+              ? teamDoc.name?.trim() || teamDoc.captain?.username || 'Squad'
+              : 'Squad';
+          (slot.players || []).forEach((p) => {
+            const uid = String(p?._id || p);
+            rosterTeamByUser.set(uid, { teamId, teamName });
+          });
+        });
+
+        const streamByUser = new Map();
+        (m.proof?.squadStreams || []).forEach((s) => {
+          const uid = String(s.user?._id || s.user);
+          streamByUser.set(uid, s);
+        });
+
+        const statByUser = new Map();
+        (m.result?.squadStats || []).forEach((s) => {
+          const uid = String(s.user?._id || s.user);
+          statByUser.set(uid, s);
+        });
+
+        for (const [uid, teamInfo] of rosterTeamByUser.entries()) {
+          const agg = ensure(uid);
+          if (!agg) continue;
+          const s = statByUser.get(uid);
+          const proofRow = streamByUser.get(uid);
+          pushPerMatch(agg, m, {
+            opponent: null,
+            team: teamInfo,
+            kills: s ? Number(s.kills || 0) : 0,
+            placement: s?.placement ?? null,
+            score: s ? Number(s.score || 0) : 0,
+            isWinner:
+              m.winnerTeam && teamInfo.teamId ? String(m.winnerTeam) === String(teamInfo.teamId) : null,
+            streamSubmitted: Boolean(proofRow?.streamUrl),
+            proofSubmitted: Boolean(proofRow?.screenshot),
+          });
+        }
+      } else {
+        const p1 = m.player1;
+        const p2 = m.player2;
+        const p1Id = p1 ? String(p1?._id || p1) : null;
+        const p2Id = p2 ? String(p2?._id || p2) : null;
+        const winnerId = m.winner ? String(m.winner?._id || m.winner) : null;
+
+        if (p1Id) {
+          const agg = ensure(p1);
+          pushPerMatch(agg, m, {
+            opponent: p2 && typeof p2 === 'object' ? { _id: p2._id, username: p2.username } : p2Id ? { _id: p2Id } : null,
+            kills: m.result?.player1Kills ?? 0,
+            placement: m.result?.player1Placement ?? null,
+            score: m.result?.player1Score ?? 0,
+            isWinner: winnerId ? winnerId === p1Id : null,
+            streamSubmitted: Boolean(m.proof?.player1StreamUrl),
+            proofSubmitted: Boolean(m.proof?.player1Screenshot),
+          });
+        }
+        if (p2Id) {
+          const agg = ensure(p2);
+          pushPerMatch(agg, m, {
+            opponent: p1 && typeof p1 === 'object' ? { _id: p1._id, username: p1.username } : p1Id ? { _id: p1Id } : null,
+            kills: m.result?.player2Kills ?? 0,
+            placement: m.result?.player2Placement ?? null,
+            score: m.result?.player2Score ?? 0,
+            isWinner: winnerId ? winnerId === p2Id : null,
+            streamSubmitted: Boolean(m.proof?.player2StreamUrl),
+            proofSubmitted: Boolean(m.proof?.player2Screenshot),
+          });
+        }
+      }
+    }
+
+    // finalize derived fields
+    for (const agg of players.values()) {
+      const placements = agg.totals.placements;
+      if (placements.length) {
+        agg.totals.avgPlacement = Number(
+          (placements.reduce((a, b) => a + b, 0) / placements.length).toFixed(2)
+        );
+      }
+      const deaths = agg.totals.losses || 0;
+      agg.totals.kd = deaths > 0 ? Number((agg.totals.kills / deaths).toFixed(2)) : agg.totals.kills;
+
+      // if leaderboard didn't seed totalPoints, compute a fallback
+      if (!leaderboard?.entries?.length) {
+        agg.totals.totalPoints = agg.totals.totalScore + agg.totals.wins * winPoints;
+      }
+    }
+
+    const rows = Array.from(players.values()).sort((a, b) => (b.totals.totalPoints || 0) - (a.totals.totalPoints || 0));
+
+    return res.status(200).json({
+      tournament,
+      winPoints,
+      players: rows,
+      matchesCount: matches.length,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Failed to compute admin player stats' });
+  }
+}
+
 module.exports = {
   createTournament,
   getAllTournaments,
@@ -530,4 +766,5 @@ module.exports = {
   registerSquad,
   startTournament,
   setBrWinner,
+  getAdminPlayerStats,
 };

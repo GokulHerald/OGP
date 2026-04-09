@@ -1,12 +1,6 @@
 const express = require('express');
-const connectDB = require('../config/db');
 
 const router = express.Router();
-
-router.use(async (req, res, next) => {
-  await connectDB();
-  next();
-});
 
 router.get('/ping', (req, res) => {
   res.json({ ok: true, service: 'ogp-api' });
@@ -19,4 +13,3 @@ router.use('/leaderboard', require('./leaderboard.routes'));
 router.use('/payments', require('./payment.routes'));
 
 module.exports = router;
-

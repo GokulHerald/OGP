@@ -10,6 +10,7 @@ const {
   registerSquad,
   startTournament,
   setBrWinner,
+  getAdminPlayerStats,
 } = require('../controllers/tournament.controller');
 
 const router = express.Router();
@@ -24,6 +25,7 @@ const validate = (req, res, next) => {
 
 router.get('/', getAllTournaments);
 router.get('/:id', getTournamentById);
+router.get('/:id/admin/player-stats', protect, restrictTo('organizer'), getAdminPlayerStats);
 
 router.post(
   '/',
